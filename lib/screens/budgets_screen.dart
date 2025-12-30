@@ -5,34 +5,65 @@ import '../providers/category_provider.dart';
 import '../providers/settings_provider.dart';
 import '../l10n/app_strings.dart'; // Import
 
-class BudgetsScreen extends StatelessWidget {
+class BudgetsScreen extends StatefulWidget {
   const BudgetsScreen({super.key});
+
+  @override
+  State<BudgetsScreen> createState() => _BudgetsScreenState();
+}
+
+class _BudgetsScreenState extends State<BudgetsScreen> {
+  String _selectedPeriod = 'month'; // 'day', 'week', 'month', 'year'
 
   @override
   Widget build(BuildContext context) {
     final settings = Provider.of<SettingsProvider>(context);
-    final lang = settings.languageCode; // Get lang
+    final lang = settings.languageCode;
     final expenseProvider = Provider.of<ExpenseProvider>(context);
     final categoryProvider = Provider.of<CategoryProvider>(context);
     
-    // Calculate totals for current month
+    // Filter Transactions based on Period
     final now = DateTime.now();
-    final currentMonthTransactions = expenseProvider.transactions.where((tx) => 
-      tx.isExpense && 
-      tx.date.year == now.year && 
-      tx.date.month == now.month
-    ).toList();
+    final periodTransactions = expenseProvider.transactions.where((tx) {
+      if (!tx.isExpense) return false;
 
-    double totalSpentMonth = 0;
+      switch (_selectedPeriod) {
+        case 'day':
+          return tx.date.year == now.year && tx.date.month == now.month && tx.date.day == now.day;
+        case 'week':
+           // Simpler week logic: same week number (requires package or custom logic)
+           // Or just last 7 days? Or ISO week.
+           // Let's us ISO week approximation for now or simple "Start of week"
+           final startOfWeek = now.subtract(Duration(days: now.weekday - 1)); // Mon
+           final endOfWeek = startOfWeek.add(const Duration(days: 7));
+           return tx.date.isAfter(startOfWeek.subtract(const Duration(seconds: 1))) && tx.date.isBefore(endOfWeek);
+        case 'month':
+          return tx.date.year == now.year && tx.date.month == now.month;
+        case 'year':
+          return tx.date.year == now.year;
+        default:
+          return false;
+      }
+    }).toList();
+
+    double totalSpent = 0;
     Map<String, double> categorySpent = {};
 
-    for (var tx in currentMonthTransactions) {
-      totalSpentMonth += tx.amount;
+    for (var tx in periodTransactions) {
+      totalSpent += tx.amount;
       categorySpent[tx.categoryId] = (categorySpent[tx.categoryId] ?? 0) + tx.amount;
     }
 
-    final globalLimit = settings.globalBudgetLimit;
+    final globalLimit = settings.getBudget(_selectedPeriod);
     final categoriesWithLimit = categoryProvider.categories.where((c) => c.budgetLimit != null && c.budgetLimit! > 0).toList();
+
+    // Map strings for selector
+    final periodLabels = {
+      'day': AppStrings.get('filterDay', lang),
+      'week': AppStrings.get('filterWeek', lang),
+      'month': AppStrings.get('filterMonth', lang),
+      'year': AppStrings.get('filterYear', lang),
+    };
 
     return Scaffold(
       appBar: AppBar(title: Text(AppStrings.get('budgets', lang))),
@@ -41,14 +72,37 @@ class BudgetsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Period Selector
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: ['day', 'week', 'month', 'year'].map((period) {
+                  final isSelected = _selectedPeriod == period;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8.0),
+                    child: ChoiceChip(
+                      label: Text(periodLabels[period]!),
+                      selected: isSelected,
+                      onSelected: (selected) {
+                        if (selected) setState(() => _selectedPeriod = period);
+                      },
+                      selectedColor: const Color(0xFF26A69A),
+                      labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.grey),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 20),
+
             // Global Budget Card
             if (globalLimit > 0) ...[
-              Text(AppStrings.get('globalMonthlyBudget', lang), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text(AppStrings.get('globalBudget', lang), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
               _buildBudgetCard(
                 context, 
                 name: AppStrings.get('totalSpending', lang), 
-                spent: totalSpentMonth, 
+                spent: totalSpent, 
                 limit: globalLimit, 
                 color: const Color(0xFF26A69A),
                 icon: Icons.account_balance_wallet
@@ -73,25 +127,33 @@ class BudgetsScreen extends StatelessWidget {
             ],
 
             // Category Budgets
-            if (categoriesWithLimit.isNotEmpty) ...[
-              Text(AppStrings.get('categoryBudgets', lang), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              ...categoriesWithLimit.map((cat) {
-                 final spent = categorySpent[cat.id] ?? 0.0;
-                 return Padding(
-                   padding: const EdgeInsets.only(bottom: 16.0),
-                   child: _buildBudgetCard(
-                     context,
-                     name: cat.name,
-                     spent: spent,
-                     limit: cat.budgetLimit!,
-                     color: cat.color,
-                     icon: cat.icon
-                   ),
-                 );
-              }),
-            ] else 
-              const Center(child: Text('No category limits set.', style: TextStyle(color: Colors.grey))),
+            // Note: Category Budgets are usually monthly. Do we scale them? 
+            // For now, let's keep them as "Monthly Limits" shown only when 'month' is selected?
+            // Or scale them? Scaling is complex. 
+            // Let's show them ONLY if 'month' is selected for now, to avoid confusion.
+            if (_selectedPeriod == 'month') ...[
+              if (categoriesWithLimit.isNotEmpty) ...[
+                Text(AppStrings.get('categoryBudgets', lang), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+                ...categoriesWithLimit.map((cat) {
+                   final spent = categorySpent[cat.id] ?? 0.0;
+                   return Padding(
+                     padding: const EdgeInsets.only(bottom: 16.0),
+                     child: _buildBudgetCard(
+                       context,
+                       name: cat.name,
+                       spent: spent,
+                       limit: cat.budgetLimit!,
+                       color: cat.color,
+                       icon: cat.icon
+                     ),
+                   );
+                }),
+              ]
+            ] else ...[
+               // Optional: Show message or hide logic
+               Center(child: Text('Category budgets are monthly.', style: TextStyle(color: Colors.grey.withValues(alpha: 0.5)))),
+            ],
           ],
         ),
       ),

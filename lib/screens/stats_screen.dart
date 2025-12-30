@@ -238,157 +238,78 @@ class _StatsScreenState extends State<StatsScreen> {
   Widget _buildTrendsTab(BuildContext context, SettingsProvider settings, String lang) {
      return Consumer<ExpenseProvider>(
         builder: (context, provider, _) {
-           // We'll show last 7 days usually, or group by month if filter is Year.
-           // For MVP, let's show Daily Spending for the selected Time Filter range.
-           // If "All" or "Year", maybe show Monthly.
-
-           // Simplify: Always show Daily Bar Chart for the filtered transactions.
-           // If too many days, it might be crowded. Let's limit to last 7 days chart specifically for trends, 
-           // or aggregations.
-           
-           // Improving: Use the existing _selectedTimeFilter to decide chart granularity.
-           // Day -> Hourly? (Too detailed).
-           // Week -> Daily (7 bars).
-           // Month -> Daily (~30 bars).
-           // Year -> Monthly (12 bars).
-           
            final transactions = _filterTransactions(provider.transactions);
            if (transactions.isEmpty) return Center(child: Text(AppStrings.get('noData', lang)));
 
-           // Prepare Data
-           Map<int, double> groupedData = {}; // Index -> Amount. Index depends on grouping strategy.
+           // Data Preparation
+           // We will show Day-by-Day or Month-by-Month data based on filter
+           Map<int, double> incomeData = {};
+           Map<int, double> expenseData = {};
            double maxAmount = 0;
-           List<String> labels = [];
+           
+           bool isYearly = _selectedTimeFilter == 'year' || _selectedTimeFilter == 'all';
+           int maxX = isYearly ? 12 : 31; // Days or Months
 
-           // Strategy switch
-           if (_selectedTimeFilter == 'year' || _selectedTimeFilter == 'all') {
-             // Monthly Grouping
+           if (isYearly) {
              for (var tx in transactions) {
-               // Only show what user selected (Expense vs Income) or both? 
-               // usually expenses are tracked. Let's respect _showExpenses toggle from other tab? 
-               // Or force expenses? Let's respect the toggle.
-               if (tx.isExpense == _showExpenses) {
-                  int month = tx.date.month;
-                  groupedData[month] = (groupedData[month] ?? 0) + tx.amount;
+               int month = tx.date.month;
+               if (tx.isExpense) {
+                 expenseData[month] = (expenseData[month] ?? 0) + tx.amount;
+               } else {
+                 incomeData[month] = (incomeData[month] ?? 0) + tx.amount;
                }
              }
-             // Labels: 1..12
-             for(int i=1; i<=12; i++) {
-               labels.add(DateFormat('MMM').format(DateTime(2024, i))); // Short Month Name
-               if ((groupedData[i] ?? 0) > maxAmount) maxAmount = groupedData[i]!;
-             }
-
            } else {
-             // Daily Grouping (Week/Month)
+             // Daily grouping
              for (var tx in transactions) {
-               if (tx.isExpense == _showExpenses) {
-                 // For simplified chart, let's map dates to a simple index list if sorted?
-                 // Better: "Last 7 days" style or strict calendar days.
-                 
-                 // Let's do a strict grouping by "Day of Month" for Month filter, or "Day of Week" for Week filter.
-                 int key = tx.date.day; // Simple day key
-                 if (_selectedTimeFilter == 'week') {
-                   key = tx.date.weekday; // 1..7
-                 }
-                 
-                 // If Month filter, keys are 1..31.
-                 groupedData[key] = (groupedData[key] ?? 0) + tx.amount;
+               int key = tx.date.day;
+               if (_selectedTimeFilter == 'week') {
+                  // If week, map specific dates or just 1..7?
+                  // Let's us 1..7 for simplicity if we can map date to weekday
+                  key = tx.date.weekday;
+                  maxX = 7;
+               } else if (_selectedTimeFilter == 'day') {
+                 // For single day, chart is boring (1 point). 
+               }
+
+               if (tx.isExpense) {
+                 expenseData[key] = (expenseData[key] ?? 0) + tx.amount;
+               } else {
+                 incomeData[key] = (incomeData[key] ?? 0) + tx.amount;
                }
              }
-              // Calc Max
-             groupedData.forEach((_, v) { if(v > maxAmount) maxAmount = v; });
            }
 
-           // Build Bars
-           List<BarChartGroupData> barGroups = [];
-           
-           if (_selectedTimeFilter == 'year' || _selectedTimeFilter == 'all') {
-              for (int i = 1; i <= 12; i++) {
-                barGroups.add(
-                  BarChartGroupData(
-                    x: i,
-                    barRods: [
-                      BarChartRodData(
-                        toY: groupedData[i] ?? 0,
-                        color: _showExpenses ? Colors.redAccent : Colors.teal,
-                        width: 12,
-                        borderRadius: BorderRadius.circular(4),
-                      )
-                    ],
-                  )
-                );
-              }
-           } else if (_selectedTimeFilter == 'week') {
-             // 1..7 (Mon..Sun)
-              for (int i = 1; i <= 7; i++) {
-                barGroups.add(
-                  BarChartGroupData(
-                    x: i,
-                    barRods: [
-                      BarChartRodData(
-                        toY: groupedData[i] ?? 0,
-                        color: _showExpenses ? Colors.redAccent : Colors.teal,
-                        width: 16,
-                        borderRadius: BorderRadius.circular(4),
-                      )
-                    ],
-                  )
-                );
-              }
-           } else {
-             // Month / Day (Show all days found or 1..31?)
-             // 1..31 is a lot of bars. 
-             // If data is sparse, only show populated? Or all.
-             // FL Chart handles scrolling if needed, but sticky is complex.
-             // Let's standard 1..31 for Month.
-             int daysInMonth = 30; // approx
-             if (transactions.isNotEmpty) {
-                // Get month of first tx
-                final d = transactions.first.date;
-                daysInMonth = DateUtils.getDaysInMonth(d.year, d.month);
-             }
+           // Calculate Max for Y-Axis
+           incomeData.forEach((_, v) { if(v > maxAmount) maxAmount = v; });
+           expenseData.forEach((_, v) { if(v > maxAmount) maxAmount = v; });
+           if (maxAmount == 0) maxAmount = 100; // Default scale
 
-             for (int i = 1; i <= daysInMonth; i++) {
-                  barGroups.add(
-                    BarChartGroupData(
-                      x: i,
-                      barRods: [
-                        BarChartRodData(
-                          toY: groupedData[i] ?? 0,
-                          color: _showExpenses ? Colors.redAccent : Colors.teal,
-                          width: 4, // thin bars
-                          borderRadius: BorderRadius.circular(2),
-                        )
-                      ],
-                    )
-                  );
-             }
+           // Build Spots
+           List<FlSpot> incomeSpots = [];
+           List<FlSpot> expenseSpots = [];
+
+           for (int i = 1; i <= maxX; i++) {
+             incomeSpots.add(FlSpot(i.toDouble(), incomeData[i] ?? 0));
+             expenseSpots.add(FlSpot(i.toDouble(), expenseData[i] ?? 0));
            }
 
            return Column(
              children: [
                const SizedBox(height: 20),
-               Padding(
-                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                 child: Row(
-                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                   children: [
-                     Text(AppStrings.get(_showExpenses ? 'expense' : 'income', lang), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                     _buildFilterChip(AppStrings.get(_selectedTimeFilter, lang), _selectedTimeFilter), // Just visual indicator or re-use row?
-                     // Reuse row in Trends? Usually trends needs its own filter controls if different.
-                     // But for simplicity, we share the state `_selectedTimeFilter` across tabs?
-                     // Yes, let's share it. But we need the controls here too or move controls to AppBar?
-                     // Moving controls to AppBar is complex with TabBar.
-                     // Let's duplicate controls row or just put it in common header?
-                     // Scaffold body is TabBarView.
-                     // We can put the controls ABOVE TabBar? No.
-                     // Let's just put the controls inside this tab too.
-                   ],
-                 ),
+               // Legend
+               Row(
+                 mainAxisAlignment: MainAxisAlignment.center,
+                 children: [
+                   _buildLegendItem(AppStrings.get('income', lang), Colors.tealAccent),
+                   const SizedBox(width: 20),
+                   _buildLegendItem(AppStrings.get('expense', lang), Colors.redAccent),
+                 ],
                ),
-               const SizedBox(height: 10),
-               // Control Row (Duplicate for convenience)
-                SingleChildScrollView(
+               const SizedBox(height: 20),
+               
+               // Controls (Duplicate from Overview for now, or assume shared state)
+               SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
@@ -401,57 +322,123 @@ class _StatsScreenState extends State<StatsScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 40),
-               
-               // CHART
-               AspectRatio(
-                 aspectRatio: 1.5,
-                 child: BarChart(
-                   BarChartData(
-                     alignment: BarChartAlignment.spaceAround,
-                     maxY: maxAmount * 1.1, // +10% headroom
-                     titlesData: FlTitlesData(
-                       show: true,
-                       bottomTitles: AxisTitles(
-                         sideTitles: SideTitles(
-                           showTitles: true,
-                           getTitlesWidget: (value, meta) {
-                             if (_selectedTimeFilter == 'year' || _selectedTimeFilter == 'all') {
-                               // Month Names
-                               int idx = value.toInt();
-                               if(idx >= 1 && idx <= 12) {
-                                  // Show every 2nd or 3rd if crowded?
-                                  return Text(DateFormat('MMM').format(DateTime(2024, idx)), style: const TextStyle(fontSize: 10));
-                               }
-                             } else if (_selectedTimeFilter == 'week') {
-                               // Week Names (M, T, W...)
-                               const days = ['M','T','W','T','F','S','S'];
-                               int idx = value.toInt();
-                               if (idx >= 1 && idx <= 7) return Text(days[idx-1], style: const TextStyle(fontSize: 10));
-                             } else {
-                               // Days 1..31. Show every 5th?
-                               int idx = value.toInt();
-                               if (idx % 5 == 0 || idx == 1) return Text(idx.toString(), style: const TextStyle(fontSize: 10));
-                             }
-                             return const Text('');
-                           },
-                           reservedSize: 30,
-                         )
+                const SizedBox(height: 20),
+
+               Expanded(
+                 child: Padding(
+                   padding: const EdgeInsets.only(right: 16, left: 10, bottom: 10),
+                   child: LineChart(
+                     LineChartData(
+                       gridData: FlGridData(
+                         show: true, 
+                         drawVerticalLine: false,
+                         getDrawingHorizontalLine: (value) => FlLine(color: Colors.white10, strokeWidth: 1),
                        ),
-                       leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                       topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                       rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                       titlesData: FlTitlesData(
+                         show: true,
+                         rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                         bottomTitles: AxisTitles(
+                           sideTitles: SideTitles(
+                             showTitles: true,
+                             reservedSize: 30,
+                             interval: isYearly ? 2 : (maxX == 7 ? 1 : 5),
+                             getTitlesWidget: (value, meta) {
+                               int idx = value.toInt();
+                               if (idx < 1 || idx > maxX) return const Text('');
+                               
+                               if (isYearly) {
+                                 return Text(DateFormat('MMM').format(DateTime(2024, idx)), style: const TextStyle(fontSize: 10, color: Colors.grey));
+                               } else if (_selectedTimeFilter == 'week') {
+                                 const days = ['M','T','W','T','F','S','S'];
+                                 return Text(days[idx-1], style: const TextStyle(fontSize: 10, color: Colors.grey));
+                               } else {
+                                 return Text(idx.toString(), style: const TextStyle(fontSize: 10, color: Colors.grey));
+                               }
+                             },
+                           ),
+                         ),
+                         leftTitles: AxisTitles(
+                           sideTitles: SideTitles(
+                             showTitles: true,
+                             reservedSize: 40,
+                             getTitlesWidget: (value, meta) {
+                               if (value == 0) return const Text('');
+                               return Text(compactNumber(value), style: const TextStyle(fontSize: 10, color: Colors.grey));
+                             },
+                           )
+                         ),
+                       ),
+                       borderData: FlBorderData(show: false),
+                       minX: 1,
+                       maxX: maxX.toDouble(),
+                       minY: 0,
+                       maxY: maxAmount * 1.1,
+                       lineBarsData: [
+                         // Income Line
+                         LineChartBarData(
+                           spots: incomeSpots,
+                           isCurved: true,
+                           color: Colors.tealAccent,
+                           barWidth: 3,
+                           isStrokeCapRound: true,
+                           dotData: const FlDotData(show: false),
+                           belowBarData: BarAreaData(show: true, color: Colors.tealAccent.withValues(alpha: 0.1)),
+                         ),
+                         // Expense Line
+                         LineChartBarData(
+                           spots: expenseSpots,
+                           isCurved: true,
+                           color: Colors.redAccent,
+                           barWidth: 3,
+                           isStrokeCapRound: true,
+                           dotData: const FlDotData(show: false),
+                           belowBarData: BarAreaData(show: true, color: Colors.redAccent.withValues(alpha: 0.1)),
+                         ),
+                       ],
+                       lineTouchData: LineTouchData(
+                         touchTooltipData: LineTouchTooltipData(
+                           getTooltipItems: (touchedSpots) {
+                             return touchedSpots.map((spot) {
+                               final isExpense = spot.barIndex == 1; // Order in lineBarsData
+                               return LineTooltipItem(
+                                 '${isExpense ? "Exp" : "Inc"}: ${settings.currencySymbol}${spot.y.toStringAsFixed(0)}',
+                                 TextStyle(
+                                   color: isExpense ? Colors.redAccent : Colors.tealAccent, 
+                                   fontWeight: FontWeight.bold
+                                 ),
+                               );
+                             }).toList();
+                           },
+                         ),
+                       ),
                      ),
-                     gridData: const FlGridData(show: false),
-                     borderData: FlBorderData(show: false),
-                     barGroups: barGroups,
-                   )
+                   ),
                  ),
                ),
              ],
            );
         }
      );
+  }
+
+  Widget _buildLegendItem(String label, Color color) {
+    return Row(
+      children: [
+        Container(
+          width: 12, height: 12,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+
+  String compactNumber(double value) {
+    if (value >= 1000000) return '${(value/1000000).toStringAsFixed(1)}M';
+    if (value >= 1000) return '${(value/1000).toStringAsFixed(1)}k';
+    return value.toStringAsFixed(0);
   }
 
   Widget _buildFilterChip(String label, String value) {

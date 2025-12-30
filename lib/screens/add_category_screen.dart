@@ -6,16 +6,18 @@ import '../providers/category_provider.dart';
 import '../providers/settings_provider.dart';
 import '../l10n/app_strings.dart';
 
-class AddCategoryScreen extends StatefulWidget {
-  const AddCategoryScreen({super.key});
+class AddEditCategoryScreen extends StatefulWidget {
+  final Category? category; // If null, adding new. If set, editing.
+
+  const AddEditCategoryScreen({super.key, this.category});
 
   @override
-  State<AddCategoryScreen> createState() => _AddCategoryScreenState();
+  State<AddEditCategoryScreen> createState() => _AddEditCategoryScreenState();
 }
 
-class _AddCategoryScreenState extends State<AddCategoryScreen> {
+class _AddEditCategoryScreenState extends State<AddEditCategoryScreen> {
   final _nameController = TextEditingController();
-  final _budgetController = TextEditingController(); // New controller
+  final _budgetController = TextEditingController();
   Color _selectedColor = Colors.blue;
   IconData _selectedIcon = Icons.category;
 
@@ -27,26 +29,58 @@ class _AddCategoryScreenState extends State<AddCategoryScreen> {
     Colors.brown, Colors.grey, Colors.blueGrey,
   ];
 
+  // Extended Icon List
   final List<IconData> _icons = [
+    // Food & Drink
     Icons.fastfood, Icons.restaurant, Icons.local_cafe, Icons.local_bar,
-    Icons.directions_bus, Icons.directions_car, Icons.flight, Icons.local_gas_station,
+    Icons.ramen_dining, Icons.icecream, Icons.bakery_dining, Icons.liquor, 
+    // Transport & Travel
+    Icons.directions_bus, Icons.directions_car, Icons.flight, Icons.train,
+    Icons.directions_bike, Icons.local_taxi, Icons.local_gas_station, Icons.commute,
+    // Shopping
     Icons.shopping_bag, Icons.shopping_cart, Icons.credit_card, Icons.receipt,
+    Icons.store, Icons.card_giftcard, Icons.loyalty,
+    // Entertainment
     Icons.movie, Icons.music_note, Icons.sports_esports, Icons.fitness_center,
+    Icons.pool, Icons.theater_comedy, Icons.stadium, Icons.casino,
+    // Home & Utilities
     Icons.home, Icons.wifi, Icons.phone, Icons.computer,
+    Icons.lightbulb, Icons.water_drop, Icons.build, Icons.delete,
+    // Work & Education
     Icons.school, Icons.work, Icons.attach_money, Icons.savings,
+    Icons.business_center, Icons.cases, Icons.history_edu,
+    // Health & Family
     Icons.pets, Icons.child_care, Icons.medical_services, Icons.local_hospital,
-    Icons.category, Icons.star, Icons.favorite, Icons.redeem,
+    Icons.medication, Icons.spa, Icons.favorite,
+    // Misc
+    Icons.category, Icons.star, Icons.redeem, Icons.bolt,
+    Icons.lock, Icons.vpn_key, Icons.flag, Icons.map,
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.category != null) {
+      _nameController.text = widget.category!.name;
+      _selectedColor = widget.category!.color;
+      _selectedIcon = widget.category!.icon;
+      if (widget.category!.budgetLimit != null && widget.category!.budgetLimit! > 0) {
+        _budgetController.text = widget.category!.budgetLimit!.toString();
+      }
+    }
+  }
 
   void _saveCategory() {
     if (_nameController.text.isEmpty) return;
 
+    final id = widget.category?.id ?? const Uuid().v4();
+    
     final newCategory = Category(
-      id: const Uuid().v4(),
+      id: id,
       name: _nameController.text,
       iconCodePoint: _selectedIcon.codePoint,
       colorValue: _selectedColor.toARGB32(),
-      budgetLimit: double.tryParse(_budgetController.text), // Optional limit
+      budgetLimit: double.tryParse(_budgetController.text),
     );
 
     Provider.of<CategoryProvider>(context, listen: false).addCategory(newCategory);
@@ -57,9 +91,10 @@ class _AddCategoryScreenState extends State<AddCategoryScreen> {
   Widget build(BuildContext context) {
     final settings = Provider.of<SettingsProvider>(context);
     final lang = settings.languageCode;
+    final isEditing = widget.category != null;
 
     return Scaffold(
-      appBar: AppBar(title: Text(AppStrings.get('newCategory', lang))),
+      appBar: AppBar(title: Text(isEditing ? AppStrings.get('edit', lang) : AppStrings.get('newCategory', lang))),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -153,7 +188,8 @@ class _AddCategoryScreenState extends State<AddCategoryScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
-                child: Text(AppStrings.get('createCategory', lang), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                child: Text(isEditing ? AppStrings.get('saveTransaction', lang) : AppStrings.get('createCategory', lang), 
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ),
           ],

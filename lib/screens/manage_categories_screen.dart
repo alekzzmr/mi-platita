@@ -19,7 +19,7 @@ class ManageCategoriesScreen extends StatelessWidget {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const AddCategoryScreen()));
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const AddEditCategoryScreen()));
         },
         child: const Icon(Icons.add),
       ),
@@ -45,13 +45,39 @@ class ManageCategoriesScreen extends StatelessWidget {
                     child: Icon(cat.icon, color: cat.color),
                   ),
                   title: Text(cat.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.redAccent),
-                    onPressed: () async {
-                      // Prevent deleting if it's the last one or used? 
-                      // For now simple delete.
-                      await provider.deleteCategory(cat.id);
-                    },
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit, color: Colors.blueAccent),
+                        onPressed: () {
+                          Navigator.push(context, MaterialPageRoute(
+                            builder: (_) => AddEditCategoryScreen(category: cat)
+                          ));
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.redAccent),
+                        onPressed: () async {
+                           // Confirm Delete
+                           final confirm = await showDialog<bool>(
+                             context: context,
+                             builder: (ctx) => AlertDialog(
+                               title: Text(AppStrings.get('delete', lang)),
+                               content: Text(AppStrings.get('confirmDelete', lang)),
+                               actions: [
+                                 TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppStrings.get('cancel', lang))),
+                                 TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(AppStrings.get('delete', lang), style: const TextStyle(color: Colors.red))),
+                               ],
+                             ),
+                           );
+                           
+                           if (confirm == true) {
+                             await provider.deleteCategory(cat.id);
+                           }
+                        },
+                      ),
+                    ],
                   ),
                 ),
               );

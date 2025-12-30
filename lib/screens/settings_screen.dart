@@ -202,25 +202,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(AppStrings.get('globalBudget', lang), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: TextField(
-              controller: _budgetController,
-              decoration: InputDecoration(
-                prefixText: '${settings.currencySymbol} ',
-                hintText: AppStrings.get('enterMonthlyLimit', lang),
-                filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.05),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.check_circle, color: Color(0xFF26A69A)),
-                  onPressed: _saveBudget, // Explicit save action
-                ),
-              ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              onSubmitted: (_) => _saveBudget(),
-            ),
-          ),
+          
+          _buildBudgetInput(context, settings, 'day', AppStrings.get('budgetDay', lang)),
+          _buildBudgetInput(context, settings, 'week', AppStrings.get('budgetWeek', lang)),
+          _buildBudgetInput(context, settings, 'month', AppStrings.get('budgetMonth', lang)),
+          _buildBudgetInput(context, settings, 'year', AppStrings.get('budgetYear', lang)),
+
           const SizedBox(height: 10),
 
           SwitchListTile(
@@ -289,6 +276,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
           fontWeight: FontWeight.bold,
           fontSize: 14,
         ),
+      ),
+    );
+  }
+
+  Widget _buildBudgetInput(BuildContext context, SettingsProvider settings, String period, String label) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: const TextStyle(color: Colors.white70))),
+          SizedBox(
+            width: 120,
+            child: TextField(
+              controller: TextEditingController(text: settings.getBudget(period) > 0 ? settings.getBudget(period).toStringAsFixed(0) : ''),
+              textAlign: TextAlign.right,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                prefixText: settings.currencySymbol,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                isDense: true,
+                filled: true,
+                fillColor: Colors.white.withValues(alpha: 0.05),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onSubmitted: (val) {
+                 final amount = double.tryParse(val) ?? 0.0;
+                 settings.setBudget(period, amount);
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
