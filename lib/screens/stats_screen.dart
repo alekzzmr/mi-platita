@@ -242,13 +242,12 @@ class _StatsScreenState extends State<StatsScreen> {
            if (transactions.isEmpty) return Center(child: Text(AppStrings.get('noData', lang)));
 
            // Data Preparation
-           // We will show Day-by-Day or Month-by-Month data based on filter
            Map<int, double> incomeData = {};
            Map<int, double> expenseData = {};
            double maxAmount = 0;
            
            bool isYearly = _selectedTimeFilter == 'year' || _selectedTimeFilter == 'all';
-           int maxX = isYearly ? 12 : 31; // Days or Months
+           int maxX = isYearly ? 12 : 31; 
 
            if (isYearly) {
              for (var tx in transactions) {
@@ -260,18 +259,14 @@ class _StatsScreenState extends State<StatsScreen> {
                }
              }
            } else {
-             // Daily grouping
+             // Daily or Weekly
              for (var tx in transactions) {
                int key = tx.date.day;
                if (_selectedTimeFilter == 'week') {
-                  // If week, map specific dates or just 1..7?
-                  // Let's us 1..7 for simplicity if we can map date to weekday
                   key = tx.date.weekday;
                   maxX = 7;
-               } else if (_selectedTimeFilter == 'day') {
-                 // For single day, chart is boring (1 point). 
                }
-
+               
                if (tx.isExpense) {
                  expenseData[key] = (expenseData[key] ?? 0) + tx.amount;
                } else {
@@ -283,15 +278,35 @@ class _StatsScreenState extends State<StatsScreen> {
            // Calculate Max for Y-Axis
            incomeData.forEach((_, v) { if(v > maxAmount) maxAmount = v; });
            expenseData.forEach((_, v) { if(v > maxAmount) maxAmount = v; });
-           if (maxAmount == 0) maxAmount = 100; // Default scale
+           if (maxAmount == 0) maxAmount = 100; 
 
-           // Build Spots
-           List<FlSpot> incomeSpots = [];
-           List<FlSpot> expenseSpots = [];
-
+           // Build Bar Groups
+           List<BarChartGroupData> barGroups = [];
            for (int i = 1; i <= maxX; i++) {
-             incomeSpots.add(FlSpot(i.toDouble(), incomeData[i] ?? 0));
-             expenseSpots.add(FlSpot(i.toDouble(), expenseData[i] ?? 0));
+             // Only add group if there is data for this x? Or add all for correct spacing?
+             // Adding all ensures correct date alignment
+             final income = incomeData[i] ?? 0;
+             final expense = expenseData[i] ?? 0;
+             
+             barGroups.add(
+               BarChartGroupData(
+                 x: i,
+                 barRods: [
+                   BarChartRodData(
+                     toY: income,
+                     color: Colors.tealAccent,
+                     width: 6,
+                     borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
+                   ),
+                   BarChartRodData(
+                     toY: expense,
+                     color: Colors.redAccent,
+                     width: 6,
+                     borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
+                   ),
+                 ],
+               ),
+             );
            }
 
            return Column(
@@ -308,7 +323,7 @@ class _StatsScreenState extends State<StatsScreen> {
                ),
                const SizedBox(height: 20),
                
-               // Controls (Duplicate from Overview for now, or assume shared state)
+               // Controls
                SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -326,9 +341,9 @@ class _StatsScreenState extends State<StatsScreen> {
 
                Expanded(
                  child: Padding(
-                   padding: const EdgeInsets.only(right: 16, left: 10, bottom: 10),
-                   child: LineChart(
-                     LineChartData(
+                   padding: const EdgeInsets.symmetric(horizontal: 16),
+                   child: BarChart(
+                     BarChartData(
                        gridData: FlGridData(
                          show: true, 
                          drawVerticalLine: false,
@@ -342,11 +357,16 @@ class _StatsScreenState extends State<StatsScreen> {
                            sideTitles: SideTitles(
                              showTitles: true,
                              reservedSize: 30,
-                             interval: isYearly ? 2 : (maxX == 7 ? 1 : 5),
+                             interval: 1, // Show all logic handles skipping if filtered
                              getTitlesWidget: (value, meta) {
                                int idx = value.toInt();
                                if (idx < 1 || idx > maxX) return const Text('');
                                
+                               // Optimization: Skip labels if too crowded (e.g. month view with 31 days)
+                               if (_selectedTimeFilter == 'month' && idx % 5 != 0 && idx != 1 && idx != maxX) {
+                                 return const Text('');
+                               }
+
                                if (isYearly) {
                                  return Text(DateFormat('MMM').format(DateTime(2024, idx)), style: const TextStyle(fontSize: 10, color: Colors.grey));
                                } else if (_selectedTimeFilter == 'week') {
@@ -364,51 +384,27 @@ class _StatsScreenState extends State<StatsScreen> {
                              reservedSize: 40,
                              getTitlesWidget: (value, meta) {
                                if (value == 0) return const Text('');
+                               // Optimize Y axis labels
+                               if (value > maxAmount) return const Text('');
                                return Text(compactNumber(value), style: const TextStyle(fontSize: 10, color: Colors.grey));
                              },
                            )
                          ),
                        ),
                        borderData: FlBorderData(show: false),
-                       minX: 1,
-                       maxX: maxX.toDouble(),
-                       minY: 0,
+                       barGroups: barGroups,
                        maxY: maxAmount * 1.1,
-                       lineBarsData: [
-                         // Income Line
-                         LineChartBarData(
-                           spots: incomeSpots,
-                           isCurved: true,
-                           color: Colors.tealAccent,
-                           barWidth: 3,
-                           isStrokeCapRound: true,
-                           dotData: const FlDotData(show: false),
-                           belowBarData: BarAreaData(show: true, color: Colors.tealAccent.withValues(alpha: 0.1)),
-                         ),
-                         // Expense Line
-                         LineChartBarData(
-                           spots: expenseSpots,
-                           isCurved: true,
-                           color: Colors.redAccent,
-                           barWidth: 3,
-                           isStrokeCapRound: true,
-                           dotData: const FlDotData(show: false),
-                           belowBarData: BarAreaData(show: true, color: Colors.redAccent.withValues(alpha: 0.1)),
-                         ),
-                       ],
-                       lineTouchData: LineTouchData(
-                         touchTooltipData: LineTouchTooltipData(
-                           getTooltipItems: (touchedSpots) {
-                             return touchedSpots.map((spot) {
-                               final isExpense = spot.barIndex == 1; // Order in lineBarsData
-                               return LineTooltipItem(
-                                 '${isExpense ? "Exp" : "Inc"}: ${settings.currencySymbol}${spot.y.toStringAsFixed(0)}',
-                                 TextStyle(
-                                   color: isExpense ? Colors.redAccent : Colors.tealAccent, 
-                                   fontWeight: FontWeight.bold
-                                 ),
-                               );
-                             }).toList();
+                       barTouchData: BarTouchData(
+                         touchTooltipData: BarTouchTooltipData(
+                           getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                             final isExpense = rodIndex == 1;
+                             return BarTooltipItem(
+                               '${isExpense ? "Exp" : "Inc"}: ${settings.currencySymbol}${rod.toY.toStringAsFixed(0)}',
+                               TextStyle(
+                                 color: isExpense ? Colors.redAccent : Colors.tealAccent, 
+                                 fontWeight: FontWeight.bold
+                               ),
+                             );
                            },
                          ),
                        ),
@@ -416,6 +412,7 @@ class _StatsScreenState extends State<StatsScreen> {
                    ),
                  ),
                ),
+               const SizedBox(height: 10),
              ],
            );
         }

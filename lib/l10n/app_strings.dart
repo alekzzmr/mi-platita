@@ -88,6 +88,8 @@ class AppStrings {
       'all': 'All',
       'expense': 'Expense',
       'income': 'Income',
+      'budgetExceeded': 'Budget Exceeded',
+      'youHaveExceeded': 'You have exceeded your budget by',
       'noData': 'No data for this period',
     },
     'es': {
@@ -179,6 +181,8 @@ class AppStrings {
       'all': 'Todo',
       'expense': 'Gastos',
       'income': 'Ingresos',
+      'budgetExceeded': 'Límite Excedido',
+      'youHaveExceeded': 'Has excedido tu presupuesto por',
       'noData': 'Sin datos en este periodo',
     },
   };

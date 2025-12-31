@@ -77,6 +77,10 @@ class HomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
 
+                  // Budget Alert
+                  _buildBudgetAlert(context, provider, settings),
+                  const SizedBox(height: 16),
+
                   // Balance Card
                   _buildBalanceCard(context, provider),
                   const SizedBox(height: 24),
@@ -206,5 +210,59 @@ class HomeScreen extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Widget _buildBudgetAlert(BuildContext context, ExpenseProvider provider, SettingsProvider settings) {
+    // Map TimeFilter to budget key
+    String? periodKey;
+    switch (provider.currentFilter) {
+      case TimeFilter.day: periodKey = 'day'; break;
+      case TimeFilter.week: periodKey = 'week'; break;
+      case TimeFilter.month: periodKey = 'month'; break;
+      case TimeFilter.year: periodKey = 'year'; break;
+      default: periodKey = null;
+    }
+
+    if (periodKey == null) return const SizedBox.shrink();
+
+    final limit = settings.getBudget(periodKey);
+    if (limit <= 0) return const SizedBox.shrink();
+
+    final totalExpense = provider.totalExpense;
+    if (totalExpense > limit) {
+      final excess = totalExpense - limit;
+      final lang = settings.languageCode;
+      
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.redAccent.withValues(alpha: 0.1),
+          border: Border.all(color: Colors.redAccent, width: 1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(AppStrings.get('budgetExceeded', lang), 
+                    style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)
+                  ),
+                  Text('${AppStrings.get('youHaveExceeded', lang)} ${settings.currencySymbol}${excess.toStringAsFixed(2)}',
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 12)
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 }

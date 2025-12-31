@@ -17,36 +17,39 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  late TextEditingController _budgetController;
+  // Controllers for each budget period
+  late TextEditingController _dayBudgetController;
+  late TextEditingController _weekBudgetController;
+  late TextEditingController _monthBudgetController;
+  late TextEditingController _yearBudgetController;
 
   @override
   void initState() {
     super.initState();
     final settings = Provider.of<SettingsProvider>(context, listen: false);
-    _budgetController = TextEditingController(
-      text: settings.globalBudgetLimit > 0 ? settings.globalBudgetLimit.toStringAsFixed(2) : ''
+    
+    // Initialize controllers with current values
+    _dayBudgetController = TextEditingController(
+      text: settings.getBudget('day') > 0 ? settings.getBudget('day').toStringAsFixed(0) : ''
+    );
+    _weekBudgetController = TextEditingController(
+      text: settings.getBudget('week') > 0 ? settings.getBudget('week').toStringAsFixed(0) : ''
+    );
+    _monthBudgetController = TextEditingController(
+      text: settings.getBudget('month') > 0 ? settings.getBudget('month').toStringAsFixed(0) : ''
+    );
+    _yearBudgetController = TextEditingController(
+      text: settings.getBudget('year') > 0 ? settings.getBudget('year').toStringAsFixed(0) : ''
     );
   }
 
   @override
   void dispose() {
-    _budgetController.dispose();
+    _dayBudgetController.dispose();
+    _weekBudgetController.dispose();
+    _monthBudgetController.dispose();
+    _yearBudgetController.dispose();
     super.dispose();
-  }
-
-  void _saveBudget() {
-    final settings = Provider.of<SettingsProvider>(context, listen: false);
-    final amount = double.tryParse(_budgetController.text) ?? 0.0;
-    settings.setGlobalBudget(amount);
-    
-    settings.setGlobalBudget(amount);
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(AppStrings.get('budgetSaved', settings.languageCode)), backgroundColor: Colors.green),
-    );
-    
-    // Hide keyboard
-    FocusScope.of(context).unfocus();
   }
 
   Future<void> _backupData() async {
@@ -203,10 +206,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Text(AppStrings.get('globalBudget', lang), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
           
-          _buildBudgetInput(context, settings, 'day', AppStrings.get('budgetDay', lang)),
-          _buildBudgetInput(context, settings, 'week', AppStrings.get('budgetWeek', lang)),
-          _buildBudgetInput(context, settings, 'month', AppStrings.get('budgetMonth', lang)),
-          _buildBudgetInput(context, settings, 'year', AppStrings.get('budgetYear', lang)),
+          _buildBudgetInput(context, settings, 'day', AppStrings.get('budgetDay', lang), _dayBudgetController),
+          _buildBudgetInput(context, settings, 'week', AppStrings.get('budgetWeek', lang), _weekBudgetController),
+          _buildBudgetInput(context, settings, 'month', AppStrings.get('budgetMonth', lang), _monthBudgetController),
+          _buildBudgetInput(context, settings, 'year', AppStrings.get('budgetYear', lang), _yearBudgetController),
 
           const SizedBox(height: 10),
 
@@ -280,7 +283,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildBudgetInput(BuildContext context, SettingsProvider settings, String period, String label) {
+  Widget _buildBudgetInput(BuildContext context, SettingsProvider settings, String period, String label, TextEditingController controller) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Row(
@@ -289,7 +292,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SizedBox(
             width: 120,
             child: TextField(
-              controller: TextEditingController(text: settings.getBudget(period) > 0 ? settings.getBudget(period).toStringAsFixed(0) : ''),
+              controller: controller,
               textAlign: TextAlign.right,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
@@ -300,7 +303,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 fillColor: Colors.white.withValues(alpha: 0.05),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              onSubmitted: (val) {
+              onChanged: (val) {
+                 // Save immediately on change
                  final amount = double.tryParse(val) ?? 0.0;
                  settings.setBudget(period, amount);
               },
